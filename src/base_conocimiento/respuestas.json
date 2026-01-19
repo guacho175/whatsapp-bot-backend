@@ -1,0 +1,21 @@
+{
+  "reglas": [
+    {
+      "palabras_clave": ["hola", "buenas", "buenos dias", "buenas tardes"],
+      "respuesta": "Hola 👋 ¿En qué te puedo ayudar? Escribe: horario, precio, contacto."
+    },
+    {
+      "palabras_clave": ["horario", "horarios", "atienden"],
+      "respuesta": "Nuestro horario es de Lunes a Viernes, 09:00 a 18:00."
+    },
+    {
+      "palabras_clave": ["precio", "precios", "costo", "vale"],
+      "respuesta": "Los precios dependen del servicio. ¿Qué servicio te interesa?"
+    },
+    {
+      "palabras_clave": ["contacto", "correo", "email", "telefono"],
+      "respuesta": "Puedes contactarnos por correo: contacto@ejemplo.com"
+    }
+  ],
+  "fallback": "No entendí tu mensaje. Prueba con: horario, precio, contacto."
+}
