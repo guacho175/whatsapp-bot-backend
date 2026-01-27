@@ -1,21 +1,49 @@
 {
   "reglas": [
     {
-      "palabras_clave": ["hola", "buenas", "buenos dias", "buenas tardes"],
-      "respuesta": "Hola 👋 ¿En qué te puedo ayudar? Escribe: horario, precio, contacto."
+      "palabras_clave": ["hola", "buenas", "buenos dias", "buenas tardes", "hey", "hi"],
+      "respuesta": "Hola 👋 Bienvenido. Puedo ayudarte con: horario, precios, servicios, contacto o ubicación. Escribe una opción."
     },
+
     {
-      "palabras_clave": ["horario", "horarios", "atienden"],
-      "respuesta": "Nuestro horario es de Lunes a Viernes, 09:00 a 18:00."
+      "palabras_clave": ["menu", "opciones", "ayuda", "help"],
+      "respuesta": "📋 Menú disponible:\n- horario\n- precios\n- servicios\n- contacto\n- ubicacion\nEscribe una opción."
     },
+
     {
-      "palabras_clave": ["precio", "precios", "costo", "vale"],
-      "respuesta": "Los precios dependen del servicio. ¿Qué servicio te interesa?"
+      "palabras_clave": ["horario", "horarios", "atienden", "abren", "cierran"],
+      "respuesta": "🕘 Nuestro horario es de Lunes a Viernes, de 09:00 a 18:00 hrs."
     },
+
     {
-      "palabras_clave": ["contacto", "correo", "email", "telefono"],
-      "respuesta": "Puedes contactarnos por correo: contacto@ejemplo.com"
+      "palabras_clave": ["precio", "precios", "costo", "vale", "valor"],
+      "respuesta": "💰 Los precios varían según el servicio. Escribe *servicios* para conocer qué ofrecemos."
+    },
+
+    {
+      "palabras_clave": ["servicio", "servicios", "ofrecen", "hacen"],
+      "respuesta": "🛠️ Ofrecemos los siguientes servicios:\n- Soporte técnico\n- Desarrollo web\n- Automatizaciones\n- Consultoría\nEscribe *precio* para más información."
+    },
+
+    {
+      "palabras_clave": ["ubicacion", "direccion", "donde", "ubicados"],
+      "respuesta": "📍 Estamos ubicados en Santiago de Chile. La dirección exacta se entrega al agendar una visita."
+    },
+
+    {
+      "palabras_clave": ["contacto", "correo", "email", "telefono", "llamar"],
+      "respuesta": "📞 Puedes contactarnos por:\n- Email: contacto@ejemplo.com\n- Teléfono: +56 9 1234 5678"
+    },
+
+    {
+      "palabras_clave": ["gracias", "ok", "perfecto", "listo"],
+      "respuesta": "¡Con gusto! 😊 Si necesitas algo más, escribe *menu*."
+    },
+
+    {
+      "palabras_clave": ["chao", "adios", "bye", "salir"],
+      "respuesta": "👋 Gracias por escribirnos. ¡Que tengas un excelente día!"
     }
   ],
-  "fallback": "No entendí tu mensaje. Prueba con: horario, precio, contacto."
+  "fallback": "🤔 No entendí tu mensaje. Escribe *menu* para ver las opciones disponibles."
 }

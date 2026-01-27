@@ -2,6 +2,8 @@ import fs from "fs";
 
 const ruta = new URL("./respuestas.json", import.meta.url);
 
+
+
 export function obtenerRespuesta(texto) {
   const data = JSON.parse(fs.readFileSync(ruta, "utf-8"));
   const msg = (texto || "").toLowerCase();
