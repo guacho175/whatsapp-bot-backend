@@ -58,6 +58,9 @@
     "fallback": "No te entendí 😅. Escribe *hola* o *agendar* para comenzar.",
     "usar_botones": "Responde usando los botones 🙂",
     "necesitas_algo_mas": "¿Necesitas algo más?",
-    "slot_no_disponible": "Ese horario ya fue tomado 😕. Elige otro día o escribe una fecha (dd-mm-aaaa)."
+    "slot_no_disponible": "Ese horario ya fue tomado 😕. Elige otro día o escribe una fecha (dd-mm-aaaa).",
+    "pedir_email": "Para enviarte la invitación por correo 📩, escribe tu *email*.\n\nSi no quieres, responde *NO*.",
+    "email_invalido": "Ese email no se ve válido 😕. Ej: *nombre@dominio.com*.\n\nO responde *NO* para omitir."
+
   }
 }

@@ -72,7 +72,6 @@ function weekdayShortEs(dateObj) {
   return map[dateObj.getDay()];
 }
 
-
 function validarNombre(texto) {
   const t = (texto || "").trim();
   if (t.length < 2) return null;
@@ -81,13 +80,22 @@ function validarNombre(texto) {
   return t;
 }
 
+function validarEmail(texto) {
+  const t = (texto || "").trim().toLowerCase();
+  if (t.length < 6) return null;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(t)) return null;
+  return t;
+}
+
 function esSalir(msg, intent) {
-  if (intent === "NO") return true;
+  // ✅ NO debe ser "salir" global, porque se usa como respuesta válida (ej: omitir email)
   if (intent === "SALIR") return true;
   if ((msg || "").includes("salir")) return true;
   if ((msg || "").includes("cancelar")) return true;
+  if ((msg || "").includes("terminar")) return true;
   return false;
 }
+
 
 function esOtraFecha(msg, intent) {
   if (intent === "OTRA_FECHA") return true;
@@ -120,7 +128,6 @@ function overrideIntentFromButtonId(rawText) {
 
   return null;
 }
-
 
 function mapIntentAgendaToName(intent, msg) {
   let agenda = null;
@@ -182,7 +189,6 @@ function buildWeekRowsNext7Days() {
 
   return rows;
 }
-
 
 /* =========================
    FLUJO PRINCIPAL
@@ -376,12 +382,8 @@ export async function procesarMensajeEntrante({ from, texto }) {
 
   // -------------------------
   // 3) Esperando fecha
-  //    - Botones: DATE_TODAY / DATE_TOMORROW / DATE_PICK_WEEK
-  //    - Lista:   LIST:DATE:YYYY-MM-DD / LIST:OTRA_FECHA
-  //    - Manual:  dd-mm-aaaa
   // -------------------------
   if (estado.step === "AWAIT_DATE") {
-    // ✅ Si eligió "Elegir día" -> List Message con próximos 7 días
     if (intent === "DATE_PICK_WEEK") {
       await enviarListaWhatsApp({
         to: from,
@@ -393,30 +395,32 @@ export async function procesarMensajeEntrante({ from, texto }) {
       return;
     }
 
-    // ✅ Si eligió "Otra fecha (escribir)" desde lista
     if ((texto || "").trim() === "LIST:OTRA_FECHA") {
-      await enviarMensajeWhatsApp({ to: from, body: cfg.mensajes.pedir_fecha_manual || cfg.mensajes.pedir_fecha });
+      await enviarMensajeWhatsApp({
+        to: from,
+        body: cfg.mensajes.pedir_fecha_manual || cfg.mensajes.pedir_fecha
+      });
       return;
     }
 
-    // ✅ Captura fecha desde lista: LIST:DATE:YYYY-MM-DD
     let yyyyMMdd = "";
     const raw = (texto || "").trim();
     if (raw.startsWith("LIST:DATE:")) {
       yyyyMMdd = raw.replace("LIST:DATE:", "").trim();
     }
 
-    // ✅ Hoy / Mañana por botón
     if (!yyyyMMdd && (intent === "DATE_TODAY" || intent === "DATE_TOMORROW")) {
       const base = new Date();
       const d = intent === "DATE_TOMORROW" ? addDays(base, 1) : base;
       yyyyMMdd = toYMD(d);
     }
 
-    // ✅ Manual (dd-mm-aaaa)
     if (!yyyyMMdd) {
       if (esOtraFecha(msg, intent)) {
-        await enviarMensajeWhatsApp({ to: from, body: cfg.mensajes.pedir_fecha_manual || cfg.mensajes.pedir_fecha });
+        await enviarMensajeWhatsApp({
+          to: from,
+          body: cfg.mensajes.pedir_fecha_manual || cfg.mensajes.pedir_fecha
+        });
         return;
       }
 
@@ -451,7 +455,6 @@ export async function procesarMensajeEntrante({ from, texto }) {
           body: tpl(cfg.mensajes.sin_horarios, { fecha: yyyyMMdd })
         });
 
-        // ✅ volvemos a mostrar botones de fecha para no forzar formato manual
         guardarEstado(from, { ...estado, step: "AWAIT_DATE" });
 
         await enviarBotonesWhatsApp({
@@ -466,7 +469,7 @@ export async function procesarMensajeEntrante({ from, texto }) {
         return;
       }
 
-      const top = slots.slice(0, 12); // máximo 12
+      const top = slots.slice(0, 12);
       const rows = slotsToListRows(top);
 
       await enviarListaWhatsApp({
@@ -496,36 +499,17 @@ export async function procesarMensajeEntrante({ from, texto }) {
   }
 
   // -------------------------
-  // 4) Esperando selección de slot
-  //    - LIST:<event_id> (desde lista)
-  //    - número (fallback)
+  // 4.5) NUEVO: esperando email
   // -------------------------
-  if (estado.step === "AWAIT_SLOT_CHOICE") {
-    if (esOtraFecha(msg, intent)) {
-      guardarEstado(from, { step: "AWAIT_DATE", agenda: estado.agenda, nombre: estado.nombre });
-
-      await enviarBotonesWhatsApp({
-        to: from,
-        body: cfg.mensajes.pedir_fecha_botones,
-        buttons: [
-          { id: "DATE_TODAY", title: cfg.mensajes.boton_hoy },
-          { id: "DATE_TOMORROW", title: cfg.mensajes.boton_manana },
-          { id: "DATE_PICK_WEEK", title: cfg.mensajes.boton_elegir_dia }
-        ]
-      });
-      return;
-    }
-
-    // ✅ Selección desde List Message
-    if ((texto || "").startsWith("LIST:")) {
-      const eventId = (texto || "").replace("LIST:", "").trim();
-
+  if (estado.step === "AWAIT_EMAIL") {
+    // Permitir omitir
+    if (intent === "NO" || intent === "SALIR") {
       await enviarMensajeWhatsApp({ to: from, body: cfg.mensajes.confirmando });
 
       try {
         const result = await reservarSlotDjango({
           agenda: estado.agenda,
-          eventId,
+          eventId: estado.eventId,
           customer_name: estado.nombre,
           customer_phone: from,
           notes: "Reserva desde WhatsApp"
@@ -547,24 +531,101 @@ export async function procesarMensajeEntrante({ from, texto }) {
         guardarEstado(from, { step: "AFTER_CONFIRM" });
         return;
       } catch (err) {
-        const status = err?.response?.status;
-
-        if (status === 409) {
-          await enviarMensajeWhatsApp({
-            to: from,
-            body: cfg.mensajes.slot_no_disponible || cfg.mensajes.error
-          });
-          guardarEstado(from, { step: "AWAIT_DATE", agenda: estado.agenda, nombre: estado.nombre });
-          return;
-        }
-
-        console.error("❌ Error reservando slot:", err?.response?.data || err.message);
-
+        console.error("❌ Error reservando slot (sin email):", err?.response?.data || err.message);
         await enviarMensajeWhatsApp({ to: from, body: cfg.mensajes.error });
-
         guardarEstado(from, { step: "AWAIT_DATE", agenda: estado.agenda, nombre: estado.nombre });
         return;
       }
+    }
+
+    const email = validarEmail(texto);
+    if (!email) {
+      await enviarMensajeWhatsApp({ to: from, body: cfg.mensajes.email_invalido });
+      return;
+    }
+
+    await enviarMensajeWhatsApp({ to: from, body: cfg.mensajes.confirmando });
+
+    try {
+      const result = await reservarSlotDjango({
+        agenda: estado.agenda,
+        eventId: estado.eventId,
+        customer_name: estado.nombre,
+        customer_phone: from,
+        notes: "Reserva desde WhatsApp",
+        attendee_email: email
+      });
+
+      const start = result?.start?.dateTime || "";
+      const [f, h] = start.split("T");
+      const hhmm = (h || "").substring(0, 5);
+
+      await enviarBotonesWhatsApp({
+        to: from,
+        body: tpl(cfg.mensajes.confirmada, { fecha: f, hora: hhmm, nombre: estado.nombre }),
+        buttons: [
+          { id: "AGENDAR_OTRA", title: cfg.mensajes.boton_agendar_otra },
+          { id: "SALIR", title: cfg.mensajes.boton_salir }
+        ]
+      });
+
+      guardarEstado(from, { step: "AFTER_CONFIRM" });
+      return;
+    } catch (err) {
+      const status = err?.response?.status;
+
+      if (status === 409) {
+        await enviarMensajeWhatsApp({
+          to: from,
+          body: cfg.mensajes.slot_no_disponible || cfg.mensajes.error
+        });
+        guardarEstado(from, { step: "AWAIT_DATE", agenda: estado.agenda, nombre: estado.nombre });
+        return;
+      }
+
+      console.error("❌ Error reservando slot (con email):", err?.response?.data || err.message);
+
+      await enviarMensajeWhatsApp({ to: from, body: cfg.mensajes.error });
+
+      guardarEstado(from, { step: "AWAIT_DATE", agenda: estado.agenda, nombre: estado.nombre });
+      return;
+    }
+  }
+
+  // -------------------------
+  // 4) Esperando selección de slot
+  // -------------------------
+  if (estado.step === "AWAIT_SLOT_CHOICE") {
+    if (esOtraFecha(msg, intent)) {
+      guardarEstado(from, { step: "AWAIT_DATE", agenda: estado.agenda, nombre: estado.nombre });
+
+      await enviarBotonesWhatsApp({
+        to: from,
+        body: cfg.mensajes.pedir_fecha_botones,
+        buttons: [
+          { id: "DATE_TODAY", title: cfg.mensajes.boton_hoy },
+          { id: "DATE_TOMORROW", title: cfg.mensajes.boton_manana },
+          { id: "DATE_PICK_WEEK", title: cfg.mensajes.boton_elegir_dia }
+        ]
+      });
+      return;
+    }
+
+    // ✅ Selección desde List Message
+    if ((texto || "").startsWith("LIST:")) {
+      const eventId = (texto || "").replace("LIST:", "").trim();
+
+      // ✅ en vez de reservar altiro, pedimos email
+      guardarEstado(from, {
+        step: "AWAIT_EMAIL",
+        agenda: estado.agenda,
+        nombre: estado.nombre,
+        fecha: estado.fecha,
+        eventId
+      });
+
+      await enviarMensajeWhatsApp({ to: from, body: cfg.mensajes.pedir_email });
+      return;
     }
 
     // Fallback si llega un número
@@ -596,51 +657,17 @@ export async function procesarMensajeEntrante({ from, texto }) {
     const selected = slots[choice - 1];
     const eventId = selected?.event_id;
 
-    await enviarMensajeWhatsApp({ to: from, body: cfg.mensajes.confirmando });
+    // ✅ también pedimos email en el fallback numérico
+    guardarEstado(from, {
+      step: "AWAIT_EMAIL",
+      agenda: estado.agenda,
+      nombre: estado.nombre,
+      fecha: estado.fecha,
+      eventId
+    });
 
-    try {
-      const result = await reservarSlotDjango({
-        agenda: estado.agenda,
-        eventId,
-        customer_name: estado.nombre,
-        customer_phone: from,
-        notes: "Reserva desde WhatsApp"
-      });
-
-      const start = result?.start?.dateTime || selected?.start?.dateTime || "";
-      const [f, h] = start.split("T");
-      const hhmm = (h || "").substring(0, 5);
-
-      await enviarBotonesWhatsApp({
-        to: from,
-        body: tpl(cfg.mensajes.confirmada, { fecha: f, hora: hhmm, nombre: estado.nombre }),
-        buttons: [
-          { id: "AGENDAR_OTRA", title: cfg.mensajes.boton_agendar_otra },
-          { id: "SALIR", title: cfg.mensajes.boton_salir }
-        ]
-      });
-
-      guardarEstado(from, { step: "AFTER_CONFIRM" });
-      return;
-    } catch (err) {
-      const status = err?.response?.status;
-
-      if (status === 409) {
-        await enviarMensajeWhatsApp({
-          to: from,
-          body: cfg.mensajes.slot_no_disponible || cfg.mensajes.error
-        });
-        guardarEstado(from, { step: "AWAIT_DATE", agenda: estado.agenda, nombre: estado.nombre });
-        return;
-      }
-
-      console.error("❌ Error reservando slot:", err?.response?.data || err.message);
-
-      await enviarMensajeWhatsApp({ to: from, body: cfg.mensajes.error });
-
-      guardarEstado(from, { step: "AWAIT_DATE", agenda: estado.agenda, nombre: estado.nombre });
-      return;
-    }
+    await enviarMensajeWhatsApp({ to: from, body: cfg.mensajes.pedir_email });
+    return;
   }
 
   // -------------------------

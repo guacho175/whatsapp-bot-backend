@@ -165,6 +165,9 @@ export async function reservarSlotDjango({
   customer_name,
   customer_phone = "",
   notes = "",
+  attendee_email = ""  
+  
+
 }) {
   const agendaOk = normalizarAgenda(agenda);
   const eventIdOk = normalizarEventId(eventId);
@@ -177,6 +180,8 @@ export async function reservarSlotDjango({
     customer_name: String(customer_name || "").trim(),
     customer_phone: String(customer_phone || "").trim(),
     notes: String(notes || "").trim(),
+    attendee_email: String(attendee_email || "").trim() 
+
   };
 
   if (!body.customer_name) {
