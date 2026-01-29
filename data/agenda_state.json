@@ -3,6 +3,6 @@
     "step": "AWAIT_AGENDA"
   },
   "56973410397": {
-    "step": "ASK_CONFIRM"
+    "step": "AFTER_CONFIRM"
   }
 }

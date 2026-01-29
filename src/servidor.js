@@ -1,6 +1,8 @@
 import express from "express";
 import dotenv from "dotenv";
 import webhookRutas from "./rutas/webhook.rutas.js";
+import metricsRutas from "./rutas/metrics.rutas.js";
+
 
 dotenv.config();
 
@@ -11,6 +13,8 @@ app.get("/", (req, res) => res.json({ ok: true, servicio: "WhatsApp Bot Backend"
 app.get("/health", (req, res) => res.json({ ok: true }));
 
 app.use("/", webhookRutas);
+app.use("/", metricsRutas);
+
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Servidor escuchando en http://localhost:${PORT}`));
