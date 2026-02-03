@@ -5,9 +5,6 @@
     "si": ["si", "sí", "dale", "de acuerdo"],
     "ack": ["ok", "oka", "ya", "listo", "perfecto", "gracias", "genial"],
     "no": ["no", "nop", "no gracias", "despues", "después"],
-    "agenda_1": ["1", "agenda1", "agenda 1"],
-    "agenda_2": ["2", "agenda2", "agenda 2"],
-    "agenda_3": ["3", "agenda3", "agenda 3"],
     "salir": ["salir", "cancelar", "terminar"],
     "otra_fecha": ["otra fecha", "cambiar fecha", "otro dia", "otro día"]
   },
@@ -16,12 +13,14 @@
     "boton_si": "Sí",
     "boton_no": "No",
 
-    "pedir_agenda_botones": "¿En cuál agenda deseas reservar?",
-    "boton_agenda1": "Agenda1",
-    "boton_agenda2": "Agenda2",
-    "boton_agenda3": "Agenda3",
+    "sin_buckets": "Por el momento no hay agendas disponibles en el calendario de la empresa 😕. Intenta más tarde.",
 
-    "agenda_invalida": "No entendí la agenda 😕. Elige una opción.",
+    "pedir_bucket_botones": "¿En cuál *agenda* deseas reservar? (elige una opción)",
+    "bucket_invalido": "No entendí la agenda 😕. Elige una opción.",
+
+    "pedir_bucket_lista": "Selecciona una agenda disponible:",
+    "bucket_lista_boton": "Ver agendas",
+    "bucket_lista_section": "Agendas",
 
     "pedir_nombre": "Perfecto ✅. ¿Cuál es tu *nombre*?",
     "nombre_invalido": "Necesito tu nombre (solo texto). Ej: *Christian*.",
@@ -61,6 +60,5 @@
     "slot_no_disponible": "Ese horario ya fue tomado 😕. Elige otro día o escribe una fecha (dd-mm-aaaa).",
     "pedir_email": "Para enviarte la invitación por correo 📩, escribe tu *email*.\n\nSi no quieres, responde *NO*.",
     "email_invalido": "Ese email no se ve válido 😕. Ej: *nombre@dominio.com*.\n\nO responde *NO* para omitir."
-
   }
 }

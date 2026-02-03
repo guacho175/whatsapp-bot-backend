@@ -1,5 +1,4 @@
 // src/servicios/djangoAgenda.servicio.js
-
 import axios from "axios";
 
 function baseUrl() {
@@ -13,21 +12,33 @@ function normalizarAgenda(agenda) {
   }
 
   const a = String(agenda).trim();
-
-  if (!a) {
-    throw new Error("[djangoAgenda] Agenda vacía");
-  }
-
+  if (!a) throw new Error("[djangoAgenda] Agenda vacía");
   return a;
 }
 
-export async function crearEventoDjango({
-  agenda,
-  summary,
-  startIso,
-  endIso,
-  description = "",
-}) {
+function normalizarEventId(eventId) {
+  if (eventId === undefined || eventId === null) {
+    throw new Error("[djangoAgenda] Falta eventId");
+  }
+  const id = String(eventId).trim();
+  if (!id) throw new Error("[djangoAgenda] eventId vacío");
+  return id;
+}
+
+function normalizarIso(dt, campo) {
+  if (dt === undefined || dt === null) {
+    throw new Error(`[djangoAgenda] Falta ${campo}`);
+  }
+  const s = String(dt).trim();
+  if (!s) throw new Error(`[djangoAgenda] ${campo} vacío`);
+  return s;
+}
+
+/**
+ * (Opcional) Crear evento genérico
+ * POST /calendar/events
+ */
+export async function crearEventoDjango({ agenda, summary, startIso, endIso, description = "" }) {
   const agendaOk = normalizarAgenda(agenda);
 
   const url = `${baseUrl()}/calendar/events`;
@@ -37,89 +48,58 @@ export async function crearEventoDjango({
     summary: String(summary || "").trim(),
     start: String(startIso || "").trim(),
     end: String(endIso || "").trim(),
-    description: String(description || ""),
+    description: String(description || "")
   };
 
-  // 🔎 LOG CLAVE: ver exactamente qué se envía a Django
   console.log("=======================================");
   console.log("[crearEventoDjango] POST", url);
   console.log("[crearEventoDjango] BODY ENVIADO A DJANGO:");
   console.log(JSON.stringify(body, null, 2));
   console.log("=======================================");
 
-  try {
-    const resp = await axios.post(url, body, {
-      headers: { "Content-Type": "application/json" },
-      timeout: 15000,
-    });
+  const resp = await axios.post(url, body, {
+    headers: { "Content-Type": "application/json" },
+    timeout: 20000
+  });
 
-    console.log("[crearEventoDjango] RESPUESTA DJANGO:");
-    console.log(JSON.stringify(resp.data, null, 2));
-
-    return resp.data;
-  } catch (err) {
-    console.error("[crearEventoDjango] ERROR AL CREAR EVENTO");
-
-    if (err.response) {
-      console.error("STATUS:", err.response.status);
-      console.error("DATA:", JSON.stringify(err.response.data, null, 2));
-    } else {
-      console.error(err.message);
-    }
-
-    throw err;
-  }
-}
-// ==============================
-// NUEVAS FUNCIONES: SLOTS
-// ==============================
-
-function normalizarEventId(eventId) {
-  if (eventId === undefined || eventId === null) {
-    throw new Error("[djangoAgenda] Falta eventId");
-  }
-  const id = String(eventId).trim();
-  if (!id) {
-    throw new Error("[djangoAgenda] eventId vacío");
-  }
-  return id;
-}
-
-function normalizarIso(dt, campo) {
-  if (dt === undefined || dt === null) {
-    throw new Error(`[djangoAgenda] Falta ${campo}`);
-  }
-  const s = String(dt).trim();
-  if (!s) {
-    throw new Error(`[djangoAgenda] ${campo} vacío`);
-  }
-  return s;
+  return resp.data;
 }
 
 /**
- * Lista slots DISPONIBLES por agenda y rango (time_min/time_max).
- *
- * Django:
- *   GET /calendar/agendas/{agenda}/slots/list?time_min=...&time_max=...&max_results=...
+ * ✅ NUEVO: listar buckets (agendas lógicas)
+ * GET /calendar/agendas/<agenda>/buckets
+ */
+export async function listarBucketsDjango({ agenda }) {
+  const agendaOk = normalizarAgenda(agenda);
+  const url = `${baseUrl()}/calendar/agendas/${encodeURIComponent(agendaOk)}/buckets`;
+
+  console.log("=======================================");
+  console.log("[listarBucketsDjango] GET", url);
+  console.log("=======================================");
+
+  const resp = await axios.get(url, { timeout: 20000 });
+  return resp.data;
+}
+
+/**
+ * GET /calendar/agendas/<agenda>/slots/list
  */
 export async function listarSlotsDisponiblesDjango({
   agenda,
   timeMinIso,
   timeMaxIso,
-  maxResults = 250,
+  maxResults = 250
 }) {
   const agendaOk = normalizarAgenda(agenda);
   const timeMin = normalizarIso(timeMinIso, "timeMinIso");
   const timeMax = normalizarIso(timeMaxIso, "timeMaxIso");
 
-  const url = `${baseUrl()}/calendar/agendas/${encodeURIComponent(
-    agendaOk
-  )}/slots/list`;
+  const url = `${baseUrl()}/calendar/agendas/${encodeURIComponent(agendaOk)}/slots/list`;
 
   const params = {
     time_min: timeMin,
     time_max: timeMax,
-    max_results: Number(maxResults) || 250,
+    max_results: Number(maxResults) || 250
   };
 
   console.log("=======================================");
@@ -127,37 +107,12 @@ export async function listarSlotsDisponiblesDjango({
   console.log("[listarSlotsDisponiblesDjango] PARAMS:", JSON.stringify(params, null, 2));
   console.log("=======================================");
 
-  try {
-    const resp = await axios.get(url, {
-      params,
-      timeout: 20000,
-    });
-
-    console.log("[listarSlotsDisponiblesDjango] RESPUESTA DJANGO:");
-    console.log(JSON.stringify(resp.data, null, 2));
-
-    return resp.data; // { count, slots: [...] }
-  } catch (err) {
-    console.error("[listarSlotsDisponiblesDjango] ERROR AL LISTAR SLOTS");
-
-    if (err.response) {
-      console.error("STATUS:", err.response.status);
-      console.error("DATA:", JSON.stringify(err.response.data, null, 2));
-    } else {
-      console.error(err.message);
-    }
-
-    throw err;
-  }
+  const resp = await axios.get(url, { params, timeout: 20000 });
+  return resp.data;
 }
 
 /**
- * Reserva un slot por event_id.
- *
- * Django:
- *   POST /calendar/agendas/{agenda}/slots/{event_id}/reserve
- * Body:
- *   { customer_name, customer_phone?, notes? }
+ * POST /calendar/agendas/<agenda>/slots/<event_id>/reserve
  */
 export async function reservarSlotDjango({
   agenda,
@@ -165,23 +120,22 @@ export async function reservarSlotDjango({
   customer_name,
   customer_phone = "",
   notes = "",
-  attendee_email = ""  
-  
-
+  attendee_email = "",
+  bucket = ""
 }) {
   const agendaOk = normalizarAgenda(agenda);
   const eventIdOk = normalizarEventId(eventId);
 
-  const url = `${baseUrl()}/calendar/agendas/${encodeURIComponent(
-    agendaOk
-  )}/slots/${encodeURIComponent(eventIdOk)}/reserve`;
+  const url = `${baseUrl()}/calendar/agendas/${encodeURIComponent(agendaOk)}/slots/${encodeURIComponent(
+    eventIdOk
+  )}/reserve`;
 
   const body = {
     customer_name: String(customer_name || "").trim(),
     customer_phone: String(customer_phone || "").trim(),
     notes: String(notes || "").trim(),
-    attendee_email: String(attendee_email || "").trim() 
-
+    attendee_email: String(attendee_email || "").trim(),
+    bucket: String(bucket || "").trim()
   };
 
   if (!body.customer_name) {
@@ -193,26 +147,10 @@ export async function reservarSlotDjango({
   console.log("[reservarSlotDjango] BODY:", JSON.stringify(body, null, 2));
   console.log("=======================================");
 
-  try {
-    const resp = await axios.post(url, body, {
-      headers: { "Content-Type": "application/json" },
-      timeout: 20000,
-    });
+  const resp = await axios.post(url, body, {
+    headers: { "Content-Type": "application/json" },
+    timeout: 20000
+  });
 
-    console.log("[reservarSlotDjango] RESPUESTA DJANGO:");
-    console.log(JSON.stringify(resp.data, null, 2));
-
-    return resp.data; // { event_id, summary, start, end, status: "reserved" }
-  } catch (err) {
-    console.error("[reservarSlotDjango] ERROR AL RESERVAR SLOT");
-
-    if (err.response) {
-      console.error("STATUS:", err.response.status);
-      console.error("DATA:", JSON.stringify(err.response.data, null, 2));
-    } else {
-      console.error(err.message);
-    }
-
-    throw err;
-  }
+  return resp.data;
 }

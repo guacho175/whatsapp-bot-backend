@@ -1,8 +1,5 @@
 {
   "56976573855": {
     "step": "AWAIT_AGENDA"
-  },
-  "56973410397": {
-    "step": "AFTER_CONFIRM"
   }
 }

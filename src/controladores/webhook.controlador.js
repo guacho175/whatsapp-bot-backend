@@ -28,29 +28,28 @@ export async function recibirWebhook(req, res) {
 
     const from = message.from;
 
-    // 1) Texto normal
+    // timestamp REAL (epoch seconds → ms)
+    const ts = message.timestamp ? Number(message.timestamp) * 1000 : Date.now();
+
+    // Texto normal
     const textoNormal = message.text?.body?.trim() || "";
 
-    // 2) Reply Button (botón)
+    // Botón
     const buttonId = message.interactive?.button_reply?.id || "";
     const buttonTitle = message.interactive?.button_reply?.title || "";
 
-    // 3) List Message (lista)
+    // Lista
     const listId = message.interactive?.list_reply?.id || "";
     const listTitle = message.interactive?.list_reply?.title || "";
     const listDescription = message.interactive?.list_reply?.description || "";
 
-    // Priorización:
-    // - Si viene botón -> usamos su id como "texto" (intents más limpios)
-    // - Si viene lista -> enviamos un token "LIST:<id>" para que tu flujo sepa que es selección
-    // - Si no -> texto normal
     let texto = textoNormal;
 
     if (buttonId) {
-      texto = buttonId; // Ej: "SI", "NO", "AGENDA_3"
+      texto = buttonId;
       console.log("📩 Mensaje recibido (BOTÓN):", { from, buttonId, buttonTitle });
     } else if (listId) {
-      texto = `LIST:${listId}`; // Ej: LIST:vbhim0qocbciq60...
+      texto = listId; // ✅ NO modificar el ID
       console.log("📩 Mensaje recibido (LISTA):", {
         from,
         listId,
@@ -61,17 +60,10 @@ export async function recibirWebhook(req, res) {
       console.log("📩 Mensaje recibido (TEXTO):", textoNormal);
     }
 
-    // Pasamos también metadata por si después la usas (no rompe si tu función no la lee)
     await procesarMensajeEntrante({
       from,
       texto,
-      meta: {
-        buttonId,
-        buttonTitle,
-        listId,
-        listTitle,
-        listDescription
-      }
+      ts
     });
   } catch (err) {
     console.error("❌ Error procesando webhook:", err?.message || err);
