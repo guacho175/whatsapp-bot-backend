@@ -12,13 +12,8 @@ function metaConfig() {
   return { url, token };
 }
 
-/**
- * Heurística mínima para categoría de costo.
- * AJUSTA esto cuando tengas templates reales y sepas si son marketing/utility/authentication.
- */
 function detectCategoryForCost(payload) {
-  if (payload?.type === "template") return "utility"; // cambia según tus templates
-  // interactive / text: normalmente "service" (estimación)
+  if (payload?.type === "template") return "utility";
   return "service";
 }
 
@@ -36,7 +31,6 @@ async function postMeta({ url, token, payload, meta = {} }) {
       timeout: 15000
     });
 
-    // ✅ LOG ÉXITO (para conteo/costos)
     logWhatsAppEvent({
       direction: "out",
       to,
@@ -44,7 +38,7 @@ async function postMeta({ url, token, payload, meta = {} }) {
       status: "sent",
       category_for_cost,
       message_id: resp?.data?.messages?.[0]?.id || null,
-      wa_payload_kind: meta.wa_payload_kind || null // opcional: "menu_principal", "confirmacion", etc.
+      wa_payload_kind: meta.wa_payload_kind || null
     });
 
     return resp.data;
@@ -58,7 +52,6 @@ async function postMeta({ url, token, payload, meta = {} }) {
     console.error("URL:", url);
     console.error("PAYLOAD:", JSON.stringify(payload, null, 2));
 
-    // ✅ LOG ERROR (igual cuenta para auditoría; NO lo contamos como "sent")
     logWhatsAppEvent({
       direction: "out",
       to,
@@ -74,8 +67,58 @@ async function postMeta({ url, token, payload, meta = {} }) {
   }
 }
 
+/* =========================
+   ✅ Helpers de normalización
+   ========================= */
+
+function cortarTexto(s, max) {
+  const t = String(s ?? "").trim();
+  if (t.length <= max) return t;
+  return t.slice(0, Math.max(0, max - 1)) + "…";
+}
+
+/**
+ * Reglas típicas para LIST:
+ * - action.button: <= 20
+ * - section.title: <= 24
+ * - row.title: <= 24
+ * - row.description: <= 72
+ */
+function normalizarLista({ buttonText, sectionTitle, rows }) {
+  const safeButton = cortarTexto(buttonText || "Ver opciones", 20);
+  const safeSection = cortarTexto(sectionTitle || "Opciones", 24);
+
+  const safeRows = (rows || []).map((r) => ({
+    id: String(r?.id ?? "").trim(),
+    title: cortarTexto(r?.title || "Opción", 24),
+    ...(r?.description ? { description: cortarTexto(r.description, 72) } : {})
+  }));
+
+  return { safeButton, safeSection, safeRows };
+}
+
+/**
+ * Reglas para BOTONES:
+ * - reply.title: <= 20  ✅ (este era tu error)
+ */
+function normalizarBotones(buttons) {
+  return (buttons || []).map((b) => ({
+    id: String(b?.id ?? "").trim(),
+    title: cortarTexto(String(b?.title ?? ""), 20) // 👈 CLAVE
+  }));
+}
+
+/* =========================
+   ✅ Envíos WhatsApp
+   ========================= */
+
 // 1) Texto
-export async function enviarMensajeWhatsApp({ to, body, category_for_cost, wa_payload_kind }) {
+export async function enviarMensajeWhatsApp({
+  to,
+  body,
+  category_for_cost,
+  wa_payload_kind
+}) {
   const { url, token } = metaConfig();
 
   const payload = {
@@ -95,14 +138,21 @@ export async function enviarMensajeWhatsApp({ to, body, category_for_cost, wa_pa
 
 /**
  * 2) Botones (máx 3)
- * buttons: [{ id: "SI", title: "Sí" }, { id: "NO", title: "No" }]
  */
-export async function enviarBotonesWhatsApp({ to, body, buttons, category_for_cost, wa_payload_kind }) {
+export async function enviarBotonesWhatsApp({
+  to,
+  body,
+  buttons,
+  category_for_cost,
+  wa_payload_kind
+}) {
   const { url, token } = metaConfig();
 
   if (!Array.isArray(buttons) || buttons.length < 1 || buttons.length > 3) {
     throw new Error("buttons debe tener entre 1 y 3 opciones");
   }
+
+  const safeButtons = normalizarBotones(buttons);
 
   const payload = {
     messaging_product: "whatsapp",
@@ -112,9 +162,12 @@ export async function enviarBotonesWhatsApp({ to, body, buttons, category_for_co
       type: "button",
       body: { text: body },
       action: {
-        buttons: buttons.map((b) => ({
+        buttons: safeButtons.map((b) => ({
           type: "reply",
-          reply: { id: String(b.id), title: String(b.title) }
+          reply: {
+            id: b.id,
+            title: b.title // 👈 ya viene <= 20
+          }
         }))
       }
     }
@@ -129,14 +182,13 @@ export async function enviarBotonesWhatsApp({ to, body, buttons, category_for_co
 }
 
 /**
- * 3) Lista (ideal para horarios)
- * rows: [{ id: "EVENT_ID", title: "08:00", description: "2026-02-02" }, ...]
+ * 3) Lista
  */
 export async function enviarListaWhatsApp({
   to,
   body,
-  buttonText = "Ver horarios",
-  sectionTitle = "Horarios disponibles",
+  buttonText = "Ver opciones",
+  sectionTitle = "Opciones",
   rows,
   category_for_cost,
   wa_payload_kind
@@ -147,6 +199,18 @@ export async function enviarListaWhatsApp({
     throw new Error("rows debe tener al menos 1 opción");
   }
 
+  const { safeButton, safeSection, safeRows } = normalizarLista({
+    buttonText,
+    sectionTitle,
+    rows
+  });
+
+  const finalRows = safeRows.filter((r) => r.id && r.title);
+
+  if (finalRows.length < 1) {
+    throw new Error("rows inválidas (id/title vacíos) después de normalizar");
+  }
+
   const payload = {
     messaging_product: "whatsapp",
     to,
@@ -155,14 +219,14 @@ export async function enviarListaWhatsApp({
       type: "list",
       body: { text: body },
       action: {
-        button: buttonText,
+        button: safeButton,
         sections: [
           {
-            title: sectionTitle,
-            rows: rows.map((r) => ({
-              id: String(r.id),
-              title: String(r.title),
-              description: r.description ? String(r.description) : undefined
+            title: safeSection,
+            rows: finalRows.map((r) => ({
+              id: r.id,
+              title: r.title,
+              ...(r.description ? { description: r.description } : {})
             }))
           }
         ]
