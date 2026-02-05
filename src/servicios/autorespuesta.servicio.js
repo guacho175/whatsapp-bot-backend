@@ -171,17 +171,45 @@ async function renderBuckets(to) {
   const uniq = [...new Set(buckets.map((b) => String(b || "").trim()).filter(Boolean))];
 
   if (uniq.length === 0) {
-    await enviarMensajeWhatsApp({ to, body: cfg.mensajes.sin_agendas || "No hay agendas disponibles." });
+    await enviarMensajeWhatsApp({
+      to,
+      body: cfg.mensajes.sin_agendas || "No hay agendas disponibles."
+    });
     limpiarEstado(to);
     return;
   }
+
+  // WhatsApp Cloud API: interactive.button.reply.title -> min 1, max 20 chars
+  const MAX_TITLE = 20;
+  const shortTitle = (s) => {
+    const raw = String(s || "").replace(/\s+/g, " ").trim();
+    if (!raw) return "Opción";
+
+    // abreviaciones simples para ganar espacio (opcional pero útil)
+    let t = raw
+      .replace(/\btratamientos?\b/gi, "Trat.")
+      .replace(/\bcorporales?\b/gi, "Corp.")
+      .replace(/\bfaciales?\b/gi, "Fac.")
+      .replace(/\baparatolog[íi]a\b/gi, "Aparat.");
+
+    // truncado final con elipsis
+    if (t.length > MAX_TITLE) {
+      t = t.slice(0, MAX_TITLE - 1).trimEnd() + "…";
+    }
+
+    // por si quedó vacío por algún caso raro
+    if (!t) t = "Opción";
+    return t;
+  };
 
   const token = newPromptToken();
   const expected = { kind: "bucket", token, expiresAt: Date.now() + 2 * 60 * 1000 };
 
   const buttons = uniq.slice(0, 3).map((b) => ({
+    // Mantén el ID con el bucket real para tu lógica (NO lo recortes)
     id: makeId("BUCKET", token, b),
-    title: b
+    // Recorta SOLO lo visible para cumplir con Meta (<=20)
+    title: shortTitle(b)
   }));
 
   await enviarBotonesWhatsApp({
@@ -193,6 +221,7 @@ async function renderBuckets(to) {
 
   patchEstado(to, { step: "AWAIT_BUCKET", agenda, buckets: uniq, expected });
 }
+
 
 async function renderAskDateButtons(to) {
   const token = newPromptToken();
