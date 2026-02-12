@@ -12,8 +12,8 @@
     },
     {
       "id": "duracion",
-      "pregunta": "¿Cuánto duran las sesiones?",
-      "respuesta": "Depende del tratamiento. En el detalle de cada servicio verás una duración estimada y el equipo confirmará en evaluación."
+      "pregunta": "Duración",
+      "respuesta": "La duración de la sesión depende del tratamiento. En el detalle de cada servicio verás una duración estimada y el equipo confirmará en evaluación."
     },
     {
       "id": "reprogramar",
