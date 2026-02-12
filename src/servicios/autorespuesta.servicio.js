@@ -186,8 +186,15 @@ function slotsToListRows(slots, token) {
 
 async function renderBuckets(to) {
   const agenda = agendaFisicaDefault();
-
-  const resp = await listarBucketsDjango({ agenda });
+  let resp;
+  try {
+    resp = await listarBucketsDjango({ agenda });
+  } catch (e) {
+    console.error("[renderBuckets] error al listar buckets:", e && e.toString ? e.toString() : e);
+    await enviarMensajeWhatsApp({ to, body: cfg.mensajes.error_conexion_django || "No puedo conectar al servicio de agendas." });
+    limpiarEstado(to);
+    return;
+  }
   const buckets = Array.isArray(resp?.buckets) ? resp.buckets : [];
   const uniq = [...new Set(buckets.map((b) => String(b || "").trim()).filter(Boolean))];
 

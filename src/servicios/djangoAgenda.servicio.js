@@ -2,7 +2,7 @@
 import axios from "axios";
 
 function baseUrl() {
-  const raw = process.env.DJANGO_API_BASE_URL || "http://127.0.0.1:8000";
+  const raw = process.env.DJANGO_API_BASE_URL || "https://175galindez.pythonanywhere.com";
   return String(raw).replace(/\/$/, "");
 }
 

@@ -1,6 +1,6 @@
 {
   "intents": {
-    "saludo": ["hola", "buenas", "buenos dias", "buenas tardes", "hey", "hi"],
+    "saludo": ["hola", "buenas", "buenos dias", "buenas tardes", "hey", "hi","ho"],
     "agenda": ["agendar", "agenda", "cita", "turno", "reservar", "hora"],
     "si": ["si", "sí", "dale", "de acuerdo"],
     "ack": ["ok", "oka", "ya", "listo", "perfecto", "gracias", "genial"],
