@@ -1,4 +1,5 @@
 import { procesarMensajeEntrante } from "../servicios/autorespuesta.servicio.js";
+import { normalizePhoneE164 } from "../servicios/whatsapp.servicio.js";
 
 export function verificarWebhook(req, res) {
   const mode = req.query["hub.mode"];
@@ -26,7 +27,18 @@ export async function recibirWebhook(req, res) {
     const message = value?.messages?.[0];
     if (!message) return;
 
-    const from = message.from;
+    const fromRaw = String(message.from || "").trim();
+    const normalizedFrom = normalizePhoneE164(fromRaw);
+    const replyTo = normalizedFrom || fromRaw;
+
+    console.log("📩 wa_id recibido del webhook:", fromRaw);
+    console.log("↪️ Número 'to' que usaremos en la respuesta:", replyTo);
+    if (normalizedFrom && normalizedFrom !== fromRaw) {
+      console.warn("⚠️ wa_id normalizado difiere del raw recibido");
+    }
+    if (!normalizedFrom) {
+      console.warn("⚠️ wa_id recibido no cumple longitudes 8..15; se usará raw");
+    }
 
     // timestamp REAL (epoch seconds → ms)
     const ts = message.timestamp ? Number(message.timestamp) * 1000 : Date.now();
@@ -47,21 +59,21 @@ export async function recibirWebhook(req, res) {
 
     if (buttonId) {
       texto = buttonId;
-      console.log("📩 Mensaje recibido (BOTÓN):", { from, buttonId, buttonTitle });
+      console.log("📩 Mensaje recibido (BOTÓN):", { from: replyTo, buttonId, buttonTitle });
     } else if (listId) {
       texto = listId; // ✅ NO modificar el ID
       console.log("📩 Mensaje recibido (LISTA):", {
-        from,
+        from: replyTo,
         listId,
         listTitle,
         listDescription
       });
     } else {
-      console.log("📩 Mensaje recibido (TEXTO):", textoNormal);
+      console.log("📩 Mensaje recibido (TEXTO):", { from: replyTo, texto: textoNormal });
     }
 
     await procesarMensajeEntrante({
-      from,
+      from: replyTo,
       texto,
       ts
     });

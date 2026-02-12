@@ -1,6 +1,45 @@
 import axios from "axios";
 import { logWhatsAppEvent } from "../metrics/whatsappLogger.js";
 
+export function normalizePhoneE164(raw) {
+  if (raw === undefined || raw === null) return null;
+  const digits = String(raw).replace(/\D+/g, "");
+  if (!digits) return null;
+  if (digits.length < 8 || digits.length > 15) return null;
+  return digits;
+}
+
+function ensurePhoneForSend(raw) {
+  const normalized = normalizePhoneE164(raw);
+
+  if (!normalized) {
+    console.warn("⚠️ No se pudo normalizar el número 'to'", { raw });
+    return { toSend: String(raw || "").trim(), normalized: null, adjusted: false };
+  }
+
+  let toSend = normalized;
+  let adjusted = false;
+
+  // Caso especial Argentina: algunos paneles no aceptan el 9 móvil. Si viene 549... probamos enviar 54 + resto.
+  if (normalized.startsWith("549") && normalized.length >= 11) {
+    const withoutNine = "54" + normalized.slice(3);
+    if (withoutNine.length >= 8 && withoutNine.length <= 15) {
+      toSend = withoutNine;
+      adjusted = true;
+    }
+  }
+
+  if (normalized !== raw) {
+    console.warn("ℹ️ Número 'to' normalizado", { raw, normalized });
+  }
+
+  if (adjusted) {
+    console.warn("ℹ️ Ajuste Argentina: enviando sin el 9 móvil", { original: normalized, toSend });
+  }
+
+  return { toSend, normalized, adjusted };
+}
+
 function metaConfig() {
   const phoneId = process.env.META_WA_PHONE_NUMBER_ID;
   const token = process.env.META_WA_ACCESS_TOKEN;
@@ -45,6 +84,7 @@ async function postMeta({ url, token, payload, meta = {} }) {
   } catch (err) {
     const status = err?.response?.status;
     const data = err?.response?.data;
+    const errorCode = data?.error?.code || null;
 
     console.error("❌ WhatsApp Cloud API error");
     console.error("Status:", status);
@@ -59,9 +99,15 @@ async function postMeta({ url, token, payload, meta = {} }) {
       status: "error",
       category_for_cost,
       http_status: status ?? null,
+      error_code: errorCode,
       error_message: data?.error?.message || err?.message || "unknown_error",
       wa_payload_kind: meta.wa_payload_kind || null
     });
+
+    if (errorCode === 131030) {
+      console.warn("⚠️ Meta respondió 131030 (Recipient phone number not in allowed list). Se registra y se sigue el flujo.");
+      return { error: data?.error || { code: 131030, message: "recipient_not_allowed" }, handled: true };
+    }
 
     throw err;
   }
@@ -120,10 +166,11 @@ export async function enviarMensajeWhatsApp({
   wa_payload_kind
 }) {
   const { url, token } = metaConfig();
+  const { toSend: finalTo } = ensurePhoneForSend(to);
 
   const payload = {
     messaging_product: "whatsapp",
-    to,
+    to: finalTo,
     type: "text",
     text: { body }
   };
@@ -147,6 +194,7 @@ export async function enviarBotonesWhatsApp({
   wa_payload_kind
 }) {
   const { url, token } = metaConfig();
+  const { toSend: finalTo } = ensurePhoneForSend(to);
 
   if (!Array.isArray(buttons) || buttons.length < 1 || buttons.length > 3) {
     throw new Error("buttons debe tener entre 1 y 3 opciones");
@@ -156,7 +204,7 @@ export async function enviarBotonesWhatsApp({
 
   const payload = {
     messaging_product: "whatsapp",
-    to,
+    to: finalTo,
     type: "interactive",
     interactive: {
       type: "button",
@@ -194,6 +242,7 @@ export async function enviarListaWhatsApp({
   wa_payload_kind
 }) {
   const { url, token } = metaConfig();
+  const { toSend: finalTo } = ensurePhoneForSend(to);
 
   if (!Array.isArray(rows) || rows.length < 1) {
     throw new Error("rows debe tener al menos 1 opción");
@@ -213,7 +262,7 @@ export async function enviarListaWhatsApp({
 
   const payload = {
     messaging_product: "whatsapp",
-    to,
+    to: finalTo,
     type: "interactive",
     interactive: {
       type: "list",
