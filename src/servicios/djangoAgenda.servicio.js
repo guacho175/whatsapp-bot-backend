@@ -1,5 +1,6 @@
 // src/servicios/djangoAgenda.servicio.js
 import axios from "axios";
+import logger from "./logger.servicio.js";
 
 function baseUrl() {
   const raw = process.env.DJANGO_API_BASE_URL || "https://175galindez.pythonanywhere.com";
@@ -51,11 +52,7 @@ export async function crearEventoDjango({ agenda, summary, startIso, endIso, des
     description: String(description || "")
   };
 
-  console.log("=======================================");
-  console.log("[crearEventoDjango] POST", url);
-  console.log("[crearEventoDjango] BODY ENVIADO A DJANGO:");
-  console.log(JSON.stringify(body, null, 2));
-  console.log("=======================================");
+  logger.debug("[crearEventoDjango] POST", { url, body });
 
   const resp = await axios.post(url, body, {
     headers: { "Content-Type": "application/json" },
@@ -73,9 +70,7 @@ export async function listarBucketsDjango({ agenda }) {
   const agendaOk = normalizarAgenda(agenda);
   const url = `${baseUrl()}/calendar/agendas/${encodeURIComponent(agendaOk)}/buckets`;
 
-  console.log("=======================================");
-  console.log("[listarBucketsDjango] GET", url);
-  console.log("=======================================");
+  logger.debug("[listarBucketsDjango] GET", { url });
 
   const resp = await axios.get(url, { timeout: 20000 });
   return resp.data;
@@ -102,10 +97,7 @@ export async function listarSlotsDisponiblesDjango({
     max_results: Number(maxResults) || 250
   };
 
-  console.log("=======================================");
-  console.log("[listarSlotsDisponiblesDjango] GET", url);
-  console.log("[listarSlotsDisponiblesDjango] PARAMS:", JSON.stringify(params, null, 2));
-  console.log("=======================================");
+  logger.debug("[listarSlotsDisponiblesDjango] GET", { url, params });
 
   const resp = await axios.get(url, { params, timeout: 20000 });
   return resp.data;
@@ -142,10 +134,7 @@ export async function reservarSlotDjango({
     throw new Error("[reservarSlotDjango] Falta customer_name");
   }
 
-  console.log("=======================================");
-  console.log("[reservarSlotDjango] POST", url);
-  console.log("[reservarSlotDjango] BODY:", JSON.stringify(body, null, 2));
-  console.log("=======================================");
+  logger.debug("[reservarSlotDjango] POST", { url, body });
 
   const resp = await axios.post(url, body, {
     headers: { "Content-Type": "application/json" },

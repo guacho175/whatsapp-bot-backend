@@ -1,5 +1,6 @@
 import { procesarMensajeEntrante } from "../servicios/autorespuesta.servicio.js";
 import { normalizePhoneE164 } from "../servicios/whatsapp.servicio.js";
+import logger from "../servicios/logger.servicio.js";
 
 export function verificarWebhook(req, res) {
   const mode = req.query["hub.mode"];
@@ -7,11 +8,11 @@ export function verificarWebhook(req, res) {
   const challenge = req.query["hub.challenge"];
 
   if (mode === "subscribe" && token === process.env.META_VERIFY_TOKEN) {
-    console.log("✅ Webhook verificado correctamente");
+    logger.info("✅ Webhook verificado correctamente");
     return res.status(200).send(challenge);
   }
 
-  console.error("❌ Error de verificación del webhook");
+  logger.warn("❌ Error de verificación del webhook");
   return res.sendStatus(403);
 }
 
@@ -31,13 +32,12 @@ export async function recibirWebhook(req, res) {
     const normalizedFrom = normalizePhoneE164(fromRaw);
     const replyTo = normalizedFrom || fromRaw;
 
-    console.log("📩 wa_id recibido del webhook:", fromRaw);
-    console.log("↪️ Número 'to' que usaremos en la respuesta:", replyTo);
+    logger.info("MSG: wa_id recibido del webhook", { fromRaw, replyTo });
     if (normalizedFrom && normalizedFrom !== fromRaw) {
-      console.warn("⚠️ wa_id normalizado difiere del raw recibido");
+      logger.warn("WARN: wa_id normalizado difiere del raw recibido", { fromRaw, normalizedFrom });
     }
     if (!normalizedFrom) {
-      console.warn("⚠️ wa_id recibido no cumple longitudes 8..15; se usará raw");
+      logger.warn("WARN: wa_id recibido no cumple longitudes 8..15; se usará raw", { fromRaw });
     }
 
     // timestamp REAL (epoch seconds → ms)
@@ -59,17 +59,17 @@ export async function recibirWebhook(req, res) {
 
     if (buttonId) {
       texto = buttonId;
-      console.log("📩 Mensaje recibido (BOTÓN):", { from: replyTo, buttonId, buttonTitle });
+      logger.info("MSG: Mensaje recibido (BOTON)", { from: replyTo, buttonId, buttonTitle });
     } else if (listId) {
       texto = listId; // ✅ NO modificar el ID
-      console.log("📩 Mensaje recibido (LISTA):", {
+      logger.info("MSG: Mensaje recibido (LISTA)", {
         from: replyTo,
         listId,
         listTitle,
         listDescription
       });
     } else {
-      console.log("📩 Mensaje recibido (TEXTO):", { from: replyTo, texto: textoNormal });
+      logger.info("MSG: Mensaje recibido (TEXTO)", { from: replyTo, texto: textoNormal });
     }
 
     await procesarMensajeEntrante({
@@ -78,6 +78,6 @@ export async function recibirWebhook(req, res) {
       ts
     });
   } catch (err) {
-    console.error("❌ Error procesando webhook:", err?.message || err);
+    logger.error("❌ Error procesando webhook", { error: err?.message || err, stack: err?.stack });
   }
 }

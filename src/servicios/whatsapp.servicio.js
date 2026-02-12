@@ -1,5 +1,6 @@
 import axios from "axios";
 import { logWhatsAppEvent } from "../metrics/whatsappLogger.js";
+import logger from "./logger.servicio.js";
 
 export function normalizePhoneE164(raw) {
   if (raw === undefined || raw === null) return null;
@@ -13,14 +14,14 @@ function ensurePhoneForSend(raw) {
   const normalized = normalizePhoneE164(raw);
 
   if (!normalized) {
-    console.warn("⚠️ No se pudo normalizar el número 'to'", { raw });
+    logger.warn("WARN: No se pudo normalizar el número 'to'", { raw });
     return { toSend: String(raw || "").trim(), normalized: null, adjusted: false };
   }
 
   let toSend = normalized;
   let adjusted = false;
 
-  // Caso especial Argentina: algunos paneles no aceptan el 9 móvil. Si viene 549... probamos enviar 54 + resto.
+  // Caso especial Argentina: algunos paneles no aceptan el 9 móvil
   if (normalized.startsWith("549") && normalized.length >= 11) {
     const withoutNine = "54" + normalized.slice(3);
     if (withoutNine.length >= 8 && withoutNine.length <= 15) {
@@ -30,11 +31,11 @@ function ensurePhoneForSend(raw) {
   }
 
   if (normalized !== raw) {
-    console.warn("ℹ️ Número 'to' normalizado", { raw, normalized });
+    logger.info("INFO: Número 'to' normalizado", { raw, normalized });
   }
 
   if (adjusted) {
-    console.warn("ℹ️ Ajuste Argentina: enviando sin el 9 móvil", { original: normalized, toSend });
+    logger.info("INFO: Ajuste Argentina: enviando sin el 9 móvil", { original: normalized, toSend });
   }
 
   return { toSend, normalized, adjusted };
@@ -86,11 +87,12 @@ async function postMeta({ url, token, payload, meta = {} }) {
     const data = err?.response?.data;
     const errorCode = data?.error?.code || null;
 
-    console.error("❌ WhatsApp Cloud API error");
-    console.error("Status:", status);
-    console.error("Response data:", JSON.stringify(data, null, 2));
-    console.error("URL:", url);
-    console.error("PAYLOAD:", JSON.stringify(payload, null, 2));
+    logger.error("ERROR: WhatsApp Cloud API error", {
+      status,
+      responseData: data,
+      url,
+      payload
+    });
 
     logWhatsAppEvent({
       direction: "out",
@@ -105,7 +107,7 @@ async function postMeta({ url, token, payload, meta = {} }) {
     });
 
     if (errorCode === 131030) {
-      console.warn("⚠️ Meta respondió 131030 (Recipient phone number not in allowed list). Se registra y se sigue el flujo.");
+      logger.warn("WARN: Meta respondió 131030 (Recipient phone number not in allowed list). Se registra y se sigue el flujo.", { errorCode, to });
       return { error: data?.error || { code: 131030, message: "recipient_not_allowed" }, handled: true };
     }
 

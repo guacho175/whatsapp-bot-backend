@@ -29,19 +29,21 @@ import {
   parseId,
   isExpectedInteraction
 } from "./flujoGuard.servicio.js";
+import {
+  manejarNavegacion
+} from "./enrutadorConversacion.servicio.js";
 
-import { manejarNavegacion } from "./enrutadorConversacion.servicio.js";
+import logger from "./logger.servicio.js";
 
 const cfg = cargarRespuestasCalendario();
-
 const userQueue = new Map();
 
 function enqueueUser(from, fn) {
   const prev = userQueue.get(from) || Promise.resolve();
   const next = prev
-    .catch((e) => console.error("[enqueueUser] error previo:", e))
+    .catch((e) => logger.error("[enqueueUser] error previo", { from, error: e?.message || e, stack: e?.stack }))
     .then(fn)
-    .catch((e) => console.error("[enqueueUser] error en handler:", e))
+    .catch((e) => logger.error("[enqueueUser] error en handler", { from, error: e?.message || e, stack: e?.stack }))
     .finally(() => {
       if (userQueue.get(from) === next) userQueue.delete(from);
     });
@@ -190,7 +192,7 @@ async function renderBuckets(to) {
   try {
     resp = await listarBucketsDjango({ agenda });
   } catch (e) {
-    console.error("[renderBuckets] error al listar buckets:", e && e.toString ? e.toString() : e);
+    logger.error("[renderBuckets] error al listar buckets", { to, agenda, error: e?.message || e, stack: e?.stack });
     await enviarMensajeWhatsApp({ to, body: cfg.mensajes.error_conexion_django || "No puedo conectar al servicio de agendas." });
     limpiarEstado(to);
     return;
