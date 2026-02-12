@@ -8,7 +8,7 @@
       "servicios": [
         {
           "id": "botox_tercio_superior",
-          "nombre": "Tercio superior del rostro / Botox",
+          "nombre": "Botox – Frente y Ojos",
           "indicador": "Aplicación en tercio superior (frente/entrecejo/contorno ocular).",
           "objetivo": "Atenuar y prevenir arrugas de expresión, mejorando el aspecto del tercio superior.",
           "duracion_min": 30,
@@ -16,7 +16,7 @@
         },
         {
           "id": "acido_hialuronico_tercio_medio_inferior",
-          "nombre": "Tercio medio e inferior / Ácido hialurónico",
+          "nombre": "Ácido Hialurónico Facial",
           "indicador": "Aplicación de ácido hialurónico.",
           "objetivo": "Relleno/volumen en zonas como labios, surcos, ojeras, pómulos, mentón, nariz; armonización.",
           "duracion_min": 45,
@@ -24,7 +24,7 @@
         },
         {
           "id": "hilos_faciales_ovalo",
-          "nombre": "Óvalo facial / Hilos tensores faciales",
+          "nombre": "Hilos Tensores – Lifting",
           "indicador": "Colocación de hilos tensores faciales.",
           "objetivo": "Tensar óvalo facial y lograr efecto lifting.",
           "duracion_min": 60,
@@ -48,7 +48,7 @@
       "servicios": [
         {
           "id": "reduccion_grasa_localizada_mela",
-          "nombre": "Reducción de grasa localizada / (MELA)",
+          "nombre": "Reduce Grasa Localizada",
           "indicador": "Tratamiento orientado a grasa localizada.",
           "objetivo": "Reducir grasa localizada y ayudar a remodelar/tonificar (según evaluación).",
           "duracion_min": 45,
@@ -88,7 +88,7 @@
       "servicios": [
         {
           "id": "laser_nordlys",
-          "nombre": "Láser Nordlys (Ellipse SWT)",
+          "nombre": "Rejuvenecimiento",
           "indicador": "Tecnología Ellipse SWT.",
           "objetivo": "Tratamiento de manchas/pigmentación, vasculares/rosácea, rejuvenecimiento y otras indicaciones.",
           "duracion_min": 45,
@@ -96,7 +96,7 @@
         },
         {
           "id": "hifu",
-          "nombre": "HIFU – Flacidez y grasa localizada",
+          "nombre": "Lifting y Reducción",
           "indicador": "Ultrasonido focalizado (HIFU).",
           "objetivo": "Tensar piel y reducir grasa localizada (facial/corporal) según evaluación.",
           "duracion_min": 60,
@@ -104,7 +104,7 @@
         },
         {
           "id": "scizer",
-          "nombre": "Scizer – Reducción de grasa localizada",
+          "nombre": "Moldea y Reduce",
           "indicador": "Tratamiento por sesiones.",
           "objetivo": "Reducción de grasa localizada (plan según evaluación).",
           "duracion_min": 45,
@@ -112,7 +112,7 @@
         },
         {
           "id": "dermasculpt",
-          "nombre": "Tonificación muscular / Dermasculpt",
+          "nombre": "Tonifica y Define",
           "indicador": "Estimulación electromagnética (según texto web).",
           "objetivo": "Tonificar y ganar masa muscular (por ejemplo abdomen).",
           "duracion_min": 30,
