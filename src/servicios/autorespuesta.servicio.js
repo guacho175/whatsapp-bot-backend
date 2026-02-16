@@ -35,6 +35,13 @@ import {
 
 import logger from "./logger.servicio.js";
 
+import {
+  logIncomingMessage,
+  logOutgoingMessage,
+  logMenuEvent,
+  updateConversationOutcome
+} from "./DBlogger.servicio.js"
+
 const cfg = cargarRespuestasCalendario();
 const userQueue = new Map();
 
@@ -57,25 +64,56 @@ function agendaFisicaDefault() {
 }
 
 const whatsappAdapter = {
-  enviarTexto: (to, body) => enviarMensajeWhatsApp({ to, body }),
+  enviarTexto: async (to, body) => {
+    const result = await enviarMensajeWhatsApp({ to, body });
+    logOutgoingMessage({
+      phoneRaw: to,
+      messageType: "text",
+      content: body,
+      payload: { to, body },
+      waMessageId: result?.messages?.[0]?.id,
+      waStatus: "sent"
+    }).catch(err => logger.error("Error en logOutgoingMessage", { err }));
+    return result;
+  },
 
-  enviarBotones: (to, body, buttons) =>
-    enviarBotonesWhatsApp({
+  enviarBotones: async (to, body, buttons) => {
+    const result = await enviarBotonesWhatsApp({
       to,
       body,
       buttons,
       wa_payload_kind: "menu_modular"
-    }),
+    });
+    logOutgoingMessage({
+      phoneRaw: to,
+      messageType: "button",
+      content: body,
+      payload: { to, body, buttons },
+      waMessageId: result?.messages?.[0]?.id,
+      waStatus: "sent"
+    }).catch(err => logger.error("Error en logOutgoingMessage", { err }));
+    return result;
+  },
 
-  enviarLista: (to, body, buttonText, sectionTitle, rows) =>
-    enviarListaWhatsApp({
+  enviarLista: async (to, body, buttonText, sectionTitle, rows) => {
+    const result = await enviarListaWhatsApp({
       to,
       body,
       buttonText,
       sectionTitle,
       rows,
       wa_payload_kind: "menu_modular_lista"
-    })
+    });
+    logOutgoingMessage({
+      phoneRaw: to,
+      messageType: "list",
+      content: body,
+      payload: { to, body, rows },
+      waMessageId: result?.messages?.[0]?.id,
+      waStatus: "sent"
+    }).catch(err => logger.error("Error en logOutgoingMessage", { err }));
+    return result;
+  }
 };
 
 function esComandoModular(raw) {
@@ -346,6 +384,9 @@ async function confirmarReserva(to, estado, email) {
   });
 
   await renderAfterConfirmMenu(to);
+
+  updateConversationOutcome(to, "agendamiento_exitoso")
+  .catch(err => logger.error("Error en updateConversationOutcome", { err })); 
 }
 
 export async function procesarMensajeEntrante({ from, texto, ts }) {
@@ -356,12 +397,31 @@ export async function procesarMensajeEntrante({ from, texto, ts }) {
     const msg = normalizarTexto(raw);
     const estado = leerEstado(from) || {};
 
+    logIncomingMessage({
+    phoneRaw: from,
+    messageType: raw.includes("|") ? "interactive" : "text",  // ✅ Detecta si es botón/lista
+    content: raw,
+    payload: {from, texto: raw, ts},
+    waMessageId: null
+    }).catch(err => logger.error("Error en logIncomingMessage", { err }));
+
     if (typeof ts === "number" && typeof estado.last_ts === "number" && ts <= estado.last_ts) return;
     if (typeof ts === "number") patchEstado(from, { last_ts: ts });
 
     // ✅ 1) comandos modulares
     if (esComandoModular(raw)) {
       limpiarEstado(from);
+
+      const [tipo, a, b] = raw.split("|");
+      logMenuEvent({
+        phoneRaw: from,
+        optionCode: raw,
+        optionTitle: a || tipo,
+        optionDescription: b || "",
+        menuLevel: tipo === "MENU" ? 0 : tipo === "CAT" ? 1 : tipo === "SERV" ? 2 : 3,
+        actionTaken: "view",
+        rawPayload: { buttonId: raw, timestamp: ts }
+      }).catch(err => logger.error("Error en logMenuEvent", { err }));
 
       const r = await manejarNavegacion({
         whatsapp: whatsappAdapter,
