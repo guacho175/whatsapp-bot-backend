@@ -1,6 +1,7 @@
 // src/servicios/dbLogger.servicio.js
 import db from "./db.servicio.js";
 import logger from "./logger.servicio.js";
+import { yamlLogIncoming, yamlLogOutgoing, yamlMarkSuccess } from "./yamlLogger.servicio.js";
 
 /**
  * Wrapper para logging en DB que NO bloquea el flujo del bot
@@ -101,6 +102,13 @@ export async function logIncomingMessage({ phoneRaw, messageType, content, paylo
       conversationId: context.conversationId,
       messageType
     });
+
+    yamlLogIncoming({
+      phoneRaw,
+      conversationId: context.conversationId,
+      messageType,
+      content
+    });
     
   } catch (error) {
     logger.error("Error registrando mensaje entrante en DB", {
@@ -133,6 +141,13 @@ export async function logOutgoingMessage({ phoneRaw, messageType, content, paylo
     logger.debug("Mensaje saliente registrado en DB", {
       conversationId: context.conversationId,
       messageType
+    });
+
+    yamlLogOutgoing({
+      phoneRaw,
+      conversationId: context.conversationId,
+      messageType,
+      content
     });
     
   } catch (error) {
@@ -235,6 +250,10 @@ export async function updateConversationOutcome(phoneRaw, outcome) {
       "UPDATE conversations SET outcome = $1 WHERE id = $2",
       [outcome, context.conversationId]
     );
+
+    if (outcome === "agendamiento_exitoso") {
+      yamlMarkSuccess(context.conversationId);
+    }
     
     logger.debug("Outcome de conversación actualizado", {
       conversationId: context.conversationId,
