@@ -16,7 +16,11 @@ import { listarPreguntas, obtenerRespuesta } from "./faq.servicio.js";
  */
 
 function botonVolverMenu() {
-  return [{ id: "MENU|VOLVER", title: "Volver al menú" }];
+  return [{ id: "MENU|VOLVER", title: "↩️ Volver al menú" }];
+}
+
+function filaVolverMenu() {
+  return { id: "MENU|VOLVER", title: "↩️ Volver al menú", description: "──────────────" };
 }
 
 function filasCategorias(categorias) {
@@ -79,7 +83,7 @@ async function mostrarCategorias(whatsapp, to) {
     "Elige una categoría:",
     "Ver categorías",
     "Categorías",
-    filasCategorias(cats).concat([{ id: "MENU|VOLVER", title: "Volver al menú", description: "" }])
+    filasCategorias(cats).concat([filaVolverMenu()])
   );
 }
 
@@ -89,7 +93,7 @@ async function mostrarServiciosDeCategoria(whatsapp, to, categoriaId) {
   if (!data) return whatsapp.enviarBotones(to, "No encontré esa categoría 😕", botonVolverMenu());
 
   const rows = filasServicios(data.servicios);
-  rows.push({ id: "MENU|VOLVER", title: "Volver al menú", description: "" });
+  rows.push(filaVolverMenu());
 
   return whatsapp.enviarLista(
     to,
@@ -105,7 +109,8 @@ async function mostrarDetalleServicio(whatsapp, to, servicioId) {
   const det = obtenerDetalleServicio(serviciosJson, servicioId);
   if (!det) return whatsapp.enviarBotones(to, "No encontré ese servicio 😕", botonVolverMenu());
 
-  return whatsapp.enviarBotones(to, textoDetalleServicio(det), botonAgendarServicio(det).concat(botonVolverMenu()));
+  // Solo informativo, sin botón de agendar
+  return whatsapp.enviarBotones(to, textoDetalleServicio(det), botonVolverMenu());
 }
 
 async function mostrarFaq(whatsapp, to) {
@@ -113,7 +118,7 @@ async function mostrarFaq(whatsapp, to) {
   const pregs = listarPreguntas(faqJson);
 
   const rows = filasPreguntas(pregs);
-  rows.push({ id: "MENU|VOLVER", title: "Volver al menú", description: "" });
+  rows.push(filaVolverMenu());
 
   return whatsapp.enviarLista(to, "Preguntas frecuentes:", "Ver preguntas", "FAQ", rows);
 }

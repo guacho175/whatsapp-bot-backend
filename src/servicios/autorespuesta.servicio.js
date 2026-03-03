@@ -59,10 +59,6 @@ function enqueueUser(from, fn) {
   return next;
 }
 
-function agendaFisicaDefault() {
-  return (process.env.BOT_DEFAULT_AGENDA || "agenda1").trim();
-}
-
 const whatsappAdapter = {
   enviarTexto: async (to, body) => {
     const result = await enviarMensajeWhatsApp({ to, body });
@@ -211,13 +207,38 @@ function buildWeekRowsNext7Days(token) {
   return rows;
 }
 
+/**
+ * Extrae fechas únicas de los slots y las convierte en filas para lista
+ */
+function buildDateRowsFromSlots(slots, token) {
+  const fechasSet = new Set();
+  
+  for (const s of slots) {
+    const dt = s?.start?.dateTime || "";
+    const fecha = dt.split("T")[0]; // YYYY-MM-DD
+    if (fecha) fechasSet.add(fecha);
+  }
+
+  const fechas = [...fechasSet].sort();
+  const rows = [];
+
+  for (const ymd of fechas.slice(0, 10)) { // máx 10 fechas
+    const [y, m, d] = ymd.split("-").map(Number);
+    const dateObj = new Date(y, m - 1, d);
+    const title = `${weekdayShortEs(dateObj)} ${pad2(d)}-${pad2(m)}`;
+    rows.push({ id: makeId("DATE", token, ymd), title, description: ymd });
+  }
+
+  return rows;
+}
+
 function slotsToListRows(slots, token) {
   return slots.map((s) => {
     const dt = s?.start?.dateTime || "";
     const [fecha, hora] = dt.split("T");
     const hhmm = (hora || "").substring(0, 5);
     return {
-      id: makeId("SLOT", token, s.event_id),
+      id: makeId("SLOT", token, s.id),
       title: hhmm,
       description: fecha
     };
@@ -225,12 +246,11 @@ function slotsToListRows(slots, token) {
 }
 
 async function renderBuckets(to) {
-  const agenda = agendaFisicaDefault();
   let resp;
   try {
-    resp = await listarBucketsDjango({ agenda });
+    resp = await listarBucketsDjango();
   } catch (e) {
-    logger.error("[renderBuckets] error al listar buckets", { to, agenda, error: e?.message || e, stack: e?.stack });
+    logger.error("[renderBuckets] error al listar buckets", { to, error: e?.message || e, stack: e?.stack });
     await enviarMensajeWhatsApp({ to, body: cfg.mensajes.error_conexion_django || "No puedo conectar al servicio de agendas." });
     limpiarEstado(to);
     return;
@@ -247,32 +267,79 @@ async function renderBuckets(to) {
   const token = newPromptToken();
   const expected = { kind: "bucket", token, expiresAt: Date.now() + 2 * 60 * 1000 };
 
-  const buttons = uniq.slice(0, 3).map((b) => ({ id: makeId("BUCKET", token, b), title: b }));
-
-  await enviarBotonesWhatsApp({
-    to,
-    body: cfg.mensajes.elegir_agenda || "Elige una agenda:",
-    buttons,
-    wa_payload_kind: "pick_bucket"
-  });
-
-  patchEstado(to, { step: "AWAIT_BUCKET", agenda, buckets: uniq, expected });
-}
-
-async function renderPickWeek(to) {
-  const token = newPromptToken();
-  const expected = { kind: "date_pick", token, expiresAt: Date.now() + 2 * 60 * 1000 };
+  // Usar lista interactiva para mostrar todas las agendas (máx 10)
+  const rows = uniq.slice(0, 10).map((b) => ({ 
+    id: makeId("BUCKET", token, b), 
+    title: b,
+    description: ""
+  }));
 
   await enviarListaWhatsApp({
     to,
-    body: cfg.mensajes.pedir_fecha_lista,
-    buttonText: cfg.mensajes.fecha_lista_boton,
-    sectionTitle: cfg.mensajes.fecha_lista_section,
-    rows: buildWeekRowsNext7Days(token),
+    body: cfg.mensajes.elegir_agenda || "Elige una agenda:",
+    buttonText: "Ver agendas",
+    sectionTitle: "Agendas disponibles",
+    rows,
+    wa_payload_kind: "pick_bucket"
+  });
+
+  patchEstado(to, { step: "AWAIT_BUCKET", buckets: uniq, expected });
+}
+
+async function renderPickWeek(to) {
+  const estado = leerEstado(to) || {};
+  const bucket = String(estado.bucket || "").trim();
+
+  if (!bucket) {
+    await enviarMensajeWhatsApp({ to, body: "Error: no hay servicio seleccionado." });
+    limpiarEstado(to);
+    return;
+  }
+
+  // Consultar slots disponibles de los próximos 30 días
+  const today = new Date();
+  const desde = toYMD(today);
+  const hasta = toYMD(addDays(today, 30));
+
+  let resp;
+  try {
+    resp = await listarSlotsDisponiblesDjango({
+      bucket,
+      desde,
+      hasta,
+      limit: 250
+    });
+  } catch (e) {
+    logger.error("[renderPickWeek] error al listar slots", { to, bucket, error: e?.message || e });
+    await enviarMensajeWhatsApp({ to, body: cfg.mensajes.error_conexion_django || "No puedo conectar al servicio de agendas." });
+    limpiarEstado(to);
+    return;
+  }
+
+  const slots = Array.isArray(resp?.slots) ? resp.slots : [];
+
+  if (slots.length === 0) {
+    await enviarMensajeWhatsApp({ to, body: cfg.mensajes.sin_horarios_disponibles || "No hay horarios disponibles en este momento." });
+    limpiarEstado(to);
+    return;
+  }
+
+  const token = newPromptToken();
+  const expected = { kind: "date_pick", token, expiresAt: Date.now() + 2 * 60 * 1000 };
+
+  const rows = buildDateRowsFromSlots(slots, token);
+
+  await enviarListaWhatsApp({
+    to,
+    body: cfg.mensajes.pedir_fecha_lista || "Selecciona un día de los próximos 7 días:",
+    buttonText: cfg.mensajes.fecha_lista_boton || "Ver días",
+    sectionTitle: cfg.mensajes.fecha_lista_section || "Días disponibles",
+    rows,
     wa_payload_kind: "pick_date_week_list"
   });
 
-  patchEstado(to, { expected });
+  // Guardar todos los slots para usarlos después
+  patchEstado(to, { expected, allSlots: slots });
 }
 
 async function renderSlots(to, fechaYmd, slots) {
@@ -299,8 +366,8 @@ async function renderAfterConfirmMenu(to) {
     to,
     body: cfg.mensajes.necesitas_algo_mas || "¿Necesitas algo más?",
     buttons: [
-      { id: makeId("MENU", token, "AGENDAR_OTRA"), title: cfg.mensajes.boton_agendar_otra },
-      { id: makeId("MENU", token, "SALIR"), title: cfg.mensajes.boton_salir }
+      { id: makeId("MENU", token, "VOLVER_MENU"), title: "Volver al menú" },
+      { id: makeId("MENU", token, "SALIR"), title: cfg.mensajes.boton_salir || "Salir" }
     ],
     wa_payload_kind: "after_confirm_menu"
   });
@@ -322,24 +389,34 @@ function inferKindFromPrefix(prefix) {
 }
 
 async function buscarYMostrarSlots(to, estado, ymd) {
-  const timeMinIso = `${ymd}T00:00:00-03:00`;
-  const timeMaxIso = `${ymd}T23:59:59-03:00`;
-
-  await enviarMensajeWhatsApp({ to, body: tpl(cfg.mensajes.buscando, { fecha: ymd }) });
-
-  const resp = await listarSlotsDisponiblesDjango({
-    agenda: estado.agenda || agendaFisicaDefault(),
-    timeMinIso,
-    timeMaxIso,
-    maxResults: 100
-  });
-
   const bucket = String(estado.bucket || "").trim();
-  let slots = Array.isArray(resp?.slots) ? resp.slots : [];
+  if (!bucket) {
+    await enviarMensajeWhatsApp({ to, body: "Error: no hay servicio seleccionado." });
+    limpiarEstado(to);
+    return;
+  }
 
-  // ✅ FIX: comparar bucket normalizado (tildes/case)
-  if (bucket) {
-    slots = slots.filter((s) => normalizarBucket(s?.bucket) === normalizarBucket(bucket));
+  // Usar slots ya cargados si existen, sino consultar API
+  let slots = [];
+  
+  if (Array.isArray(estado.allSlots) && estado.allSlots.length > 0) {
+    // Filtrar slots por la fecha seleccionada
+    slots = estado.allSlots.filter((s) => {
+      const dt = s?.start?.dateTime || "";
+      return dt.startsWith(ymd);
+    });
+  } else {
+    // Fallback: consultar API directamente
+    await enviarMensajeWhatsApp({ to, body: tpl(cfg.mensajes.buscando, { fecha: ymd }) });
+
+    const resp = await listarSlotsDisponiblesDjango({
+      bucket,
+      desde: ymd,
+      hasta: ymd,
+      limit: 100
+    });
+
+    slots = Array.isArray(resp?.slots) ? resp.slots : [];
   }
 
   if (slots.length === 0) {
@@ -364,24 +441,41 @@ async function buscarYMostrarSlots(to, estado, ymd) {
 async function confirmarReserva(to, estado, email) {
   await enviarMensajeWhatsApp({ to, body: cfg.mensajes.confirmando });
 
-  const result = await reservarSlotDjango({
-    agenda: estado.agenda || agendaFisicaDefault(),
+  await reservarSlotDjango({
+    bucket: estado.bucket,
     eventId: estado.eventId,
     customer_name: estado.nombre,
+    professional_key: estado.professionalKey || "",
     customer_phone: to,
     notes: "Reserva desde WhatsApp",
-    attendee_email: email || "",
-    bucket: estado.bucket || ""
+    attendee_email: email || ""
   });
 
-  const start = result?.start?.dateTime || "";
-  const [f, h] = start.split("T");
-  const hhmm = (h || "").substring(0, 5);
+  // Buscar la hora del slot seleccionado en el estado guardado
+  const slotsGuardados = Array.isArray(estado.slots) ? estado.slots : [];
+  const slotSeleccionado = slotsGuardados.find((s) => s.id === estado.eventId);
+  const startDateTime = slotSeleccionado?.start?.dateTime || "";
+  const [fechaSlot, horaSlot] = startDateTime.split("T");
+  const hhmm = (horaSlot || "").substring(0, 5);
 
-  await enviarMensajeWhatsApp({
-    to,
-    body: tpl(cfg.mensajes.confirmada, { fecha: f, hora: hhmm, nombre: estado.nombre })
-  });
+  // Construir mensaje de confirmación detallado
+  const servicio = estado.bucket || "No especificado";
+  const profesional = estado.professionalName || "Por asignar";
+  const correo = email || "No proporcionado";
+  const fecha = fechaSlot || estado.fecha || "";
+
+  const mensajeConfirmacion = `✅ *Reserva confirmada*
+
+📅 *Fecha:* ${fecha}
+🕐 *Hora:* ${hhmm}
+💇 *Servicio:* ${servicio}
+👤 *Profesional:* ${profesional}
+🧑 *Cliente:* ${estado.nombre}
+📧 *Correo:* ${correo}
+
+⏰ *Recuerda llegar 15 minutos antes de tu hora.*`;
+
+  await enviarMensajeWhatsApp({ to, body: mensajeConfirmacion });
 
   await renderAfterConfirmMenu(to);
 
@@ -431,13 +525,10 @@ export async function procesarMensajeEntrante({ from, texto, ts }) {
       });
 
       if (r?.accion === "DELEGAR_AGENDAMIENTO") {
-        const agenda = agendaFisicaDefault();
-
         // ✅ FIX: si viene desde detalle del servicio, ahora llega bucket_key
         if (r.payload?.bucket_key) {
           guardarEstado(from, {
             step: "AWAIT_NAME",
-            agenda,
             bucket: String(r.payload.bucket_key).trim(),
             servicioId: String(r.payload.servicio_id || "").trim(),
             expected: null
@@ -504,7 +595,6 @@ export async function procesarMensajeEntrante({ from, texto, ts }) {
 
       guardarEstado(from, {
         step: "AWAIT_NAME",
-        agenda: estado.agenda || agendaFisicaDefault(),
         bucket,
         expected: null
       });
@@ -554,7 +644,13 @@ export async function procesarMensajeEntrante({ from, texto, ts }) {
       const eventId = String(parsed.value || "").trim();
       if (!eventId) { await enviarMensajeWhatsApp({ to: from, body: cfg.mensajes.fallback }); return; }
 
-      patchEstado(from, { step: "AWAIT_EMAIL", eventId, expected: null });
+      // Buscar el slot seleccionado para obtener professional_key y professional_name
+      const slotsGuardados = Array.isArray(estado.slots) ? estado.slots : [];
+      const slotSeleccionado = slotsGuardados.find((s) => s.id === eventId);
+      const professionalKey = slotSeleccionado?.professional_key || "";
+      const professionalName = slotSeleccionado?.professional_name || "";
+
+      patchEstado(from, { step: "AWAIT_EMAIL", eventId, professionalKey, professionalName, expected: null });
       await enviarMensajeWhatsApp({ to: from, body: cfg.mensajes.pedir_email });
       return;
     }
@@ -573,7 +669,11 @@ export async function procesarMensajeEntrante({ from, texto, ts }) {
       if (!parsed || kind !== "after_menu") return;
       if (!isExpectedInteraction(estado, parsed, "after_menu")) return;
 
-      if (parsed.value === "AGENDAR_OTRA") { await renderBuckets(from); return; }
+      if (parsed.value === "VOLVER_MENU") {
+        limpiarEstado(from);
+        await manejarNavegacion({ whatsapp: whatsappAdapter, to: from, buttonId: "", texto: "hola" });
+        return;
+      }
       if (parsed.value === "SALIR") {
         await enviarMensajeWhatsApp({ to: from, body: cfg.mensajes.despedida });
         limpiarEstado(from);

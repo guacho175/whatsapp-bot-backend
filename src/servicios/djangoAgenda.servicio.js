@@ -1,4 +1,5 @@
 // src/servicios/djangoAgenda.servicio.js
+// Actualizado para nueva API: /calendar/buckets/...
 import axios from "axios";
 import logger from "./logger.servicio.js";
 
@@ -7,14 +8,13 @@ function baseUrl() {
   return String(raw).replace(/\/$/, "");
 }
 
-function normalizarAgenda(agenda) {
-  if (agenda === undefined || agenda === null) {
-    throw new Error("[djangoAgenda] Falta agenda (debe venir desde la conversación)");
+function normalizarBucket(bucket) {
+  if (bucket === undefined || bucket === null) {
+    throw new Error("[djangoAgenda] Falta bucket");
   }
-
-  const a = String(agenda).trim();
-  if (!a) throw new Error("[djangoAgenda] Agenda vacía");
-  return a;
+  const b = String(bucket).trim();
+  if (!b) throw new Error("[djangoAgenda] Bucket vacío");
+  return b;
 }
 
 function normalizarEventId(eventId) {
@@ -26,49 +26,23 @@ function normalizarEventId(eventId) {
   return id;
 }
 
-function normalizarIso(dt, campo) {
-  if (dt === undefined || dt === null) {
+function normalizarFecha(fecha, campo) {
+  if (fecha === undefined || fecha === null) {
     throw new Error(`[djangoAgenda] Falta ${campo}`);
   }
-  const s = String(dt).trim();
+  const s = String(fecha).trim();
   if (!s) throw new Error(`[djangoAgenda] ${campo} vacío`);
-  return s;
+  // Si viene ISO, extraer solo YYYY-MM-DD
+  return s.split("T")[0];
 }
 
 /**
- * (Opcional) Crear evento genérico
- * POST /calendar/events
+ * ✅ Listar buckets disponibles
+ * GET /calendar/buckets/google
+ * Retorna: { buckets: ["bucket1", "bucket2", ...] }
  */
-export async function crearEventoDjango({ agenda, summary, startIso, endIso, description = "" }) {
-  const agendaOk = normalizarAgenda(agenda);
-
-  const url = `${baseUrl()}/calendar/events`;
-
-  const body = {
-    agenda: agendaOk,
-    summary: String(summary || "").trim(),
-    start: String(startIso || "").trim(),
-    end: String(endIso || "").trim(),
-    description: String(description || "")
-  };
-
-  logger.debug("[crearEventoDjango] POST", { url, body });
-
-  const resp = await axios.post(url, body, {
-    headers: { "Content-Type": "application/json" },
-    timeout: 20000
-  });
-
-  return resp.data;
-}
-
-/**
- * ✅ NUEVO: listar buckets (agendas lógicas)
- * GET /calendar/agendas/<agenda>/buckets
- */
-export async function listarBucketsDjango({ agenda }) {
-  const agendaOk = normalizarAgenda(agenda);
-  const url = `${baseUrl()}/calendar/agendas/${encodeURIComponent(agendaOk)}/buckets`;
+export async function listarBucketsDjango() {
+  const url = `${baseUrl()}/calendar/buckets/google`;
 
   logger.debug("[listarBucketsDjango] GET", { url });
 
@@ -77,25 +51,37 @@ export async function listarBucketsDjango({ agenda }) {
 }
 
 /**
- * GET /calendar/agendas/<agenda>/slots/list
+ * ✅ Listar slots disponibles de un bucket
+ * GET /calendar/buckets/{bucket}/slots/libres
+ * Params: desde (YYYY-MM-DD), hasta (YYYY-MM-DD), limit, professional_key
+ * Retorna: { bucket, desde, hasta, count, slots: [...] }
  */
 export async function listarSlotsDisponiblesDjango({
-  agenda,
-  timeMinIso,
-  timeMaxIso,
-  maxResults = 250
+  bucket,
+  desde,
+  hasta,
+  limit = 100,
+  professionalKey = ""
 }) {
-  const agendaOk = normalizarAgenda(agenda);
-  const timeMin = normalizarIso(timeMinIso, "timeMinIso");
-  const timeMax = normalizarIso(timeMaxIso, "timeMaxIso");
+  const bucketOk = normalizarBucket(bucket);
+  const desdeOk = normalizarFecha(desde, "desde");
 
-  const url = `${baseUrl()}/calendar/agendas/${encodeURIComponent(agendaOk)}/slots/list`;
+  const url = `${baseUrl()}/calendar/buckets/${encodeURIComponent(bucketOk)}/slots/libres`;
 
   const params = {
-    time_min: timeMin,
-    time_max: timeMax,
-    max_results: Number(maxResults) || 250
+    desde: desdeOk,
+    limit: Number(limit) || 100
   };
+
+  // hasta es opcional
+  if (hasta) {
+    params.hasta = normalizarFecha(hasta, "hasta");
+  }
+
+  // professional_key es obligatorio para el bot según la API
+  if (professionalKey) {
+    params.professional_key = String(professionalKey).trim();
+  }
 
   logger.debug("[listarSlotsDisponiblesDjango] GET", { url, params });
 
@@ -104,34 +90,39 @@ export async function listarSlotsDisponiblesDjango({
 }
 
 /**
- * POST /calendar/agendas/<agenda>/slots/<event_id>/reserve
+ * ✅ Reservar un slot
+ * POST /calendar/buckets/{bucket}/slots/{event_id}/reservar
+ * Body: customer_name (req), professional_key (req), customer_phone, notes, attendee_email
  */
 export async function reservarSlotDjango({
-  agenda,
+  bucket,
   eventId,
   customer_name,
+  professional_key,
   customer_phone = "",
   notes = "",
-  attendee_email = "",
-  bucket = ""
+  attendee_email = ""
 }) {
-  const agendaOk = normalizarAgenda(agenda);
+  const bucketOk = normalizarBucket(bucket);
   const eventIdOk = normalizarEventId(eventId);
 
-  const url = `${baseUrl()}/calendar/agendas/${encodeURIComponent(agendaOk)}/slots/${encodeURIComponent(
+  const url = `${baseUrl()}/calendar/buckets/${encodeURIComponent(bucketOk)}/slots/${encodeURIComponent(
     eventIdOk
-  )}/reserve`;
+  )}/reservar`;
 
   const body = {
     customer_name: String(customer_name || "").trim(),
+    professional_key: String(professional_key || "").trim(),
     customer_phone: String(customer_phone || "").trim(),
     notes: String(notes || "").trim(),
-    attendee_email: String(attendee_email || "").trim(),
-    bucket: String(bucket || "").trim()
+    attendee_email: String(attendee_email || "").trim()
   };
 
   if (!body.customer_name) {
     throw new Error("[reservarSlotDjango] Falta customer_name");
+  }
+  if (!body.professional_key) {
+    throw new Error("[reservarSlotDjango] Falta professional_key");
   }
 
   logger.debug("[reservarSlotDjango] POST", { url, body });
