@@ -1,4 +1,5 @@
 import fs from "fs";
+import { normalizarTextoSimple } from "../utils/string.utils.js";
 
 const ruta = new URL("./respuestascalendario.json", import.meta.url);
 
@@ -6,9 +7,8 @@ export function cargarRespuestasCalendario() {
   return JSON.parse(fs.readFileSync(ruta, "utf-8"));
 }
 
-export function normalizarTexto(texto) {
-  return (texto || "").toLowerCase().trim();
-}
+// Re-exportar para compatibilidad (usa la función de utils)
+export const normalizarTexto = normalizarTextoSimple;
 
 export function contieneAlgunaPalabra(msg, palabras) {
   if (!Array.isArray(palabras) || palabras.length === 0) return false;

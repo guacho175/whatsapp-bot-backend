@@ -1,6 +1,7 @@
 import axios from "axios";
 import { logWhatsAppEvent } from "../metrics/whatsappLogger.js";
 import logger from "./logger.servicio.js";
+import { logOutgoingMessage } from "./DBlogger.servicio.js";
 
 export function normalizePhoneE164(raw) {
   if (raw === undefined || raw === null) return null;
@@ -177,12 +178,24 @@ export async function enviarMensajeWhatsApp({
     text: { body }
   };
 
-  return postMeta({
+  const result = await postMeta({
     url,
     token,
     payload,
     meta: { category_for_cost, wa_payload_kind }
   });
+
+  // ✅ Logging automático a BD
+  logOutgoingMessage({
+    phoneRaw: to,
+    messageType: "text",
+    content: body,
+    payload: { to, body },
+    waMessageId: result?.messages?.[0]?.id,
+    waStatus: "sent"
+  }).catch(err => logger.error("Error en logOutgoingMessage", { err }));
+
+  return result;
 }
 
 /**
@@ -223,12 +236,24 @@ export async function enviarBotonesWhatsApp({
     }
   };
 
-  return postMeta({
+  const result = await postMeta({
     url,
     token,
     payload,
     meta: { category_for_cost, wa_payload_kind }
   });
+
+  // ✅ Logging automático a BD
+  logOutgoingMessage({
+    phoneRaw: to,
+    messageType: "button",
+    content: body,
+    payload: { to, body, buttons },
+    waMessageId: result?.messages?.[0]?.id,
+    waStatus: "sent"
+  }).catch(err => logger.error("Error en logOutgoingMessage", { err }));
+
+  return result;
 }
 
 /**
@@ -285,10 +310,22 @@ export async function enviarListaWhatsApp({
     }
   };
 
-  return postMeta({
+  const result = await postMeta({
     url,
     token,
     payload,
     meta: { category_for_cost, wa_payload_kind }
   });
+
+  // ✅ Logging automático a BD
+  logOutgoingMessage({
+    phoneRaw: to,
+    messageType: "list",
+    content: body,
+    payload: { to, body, rows },
+    waMessageId: result?.messages?.[0]?.id,
+    waStatus: "sent"
+  }).catch(err => logger.error("Error en logOutgoingMessage", { err }));
+
+  return result;
 }
