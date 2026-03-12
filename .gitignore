@@ -48,3 +48,8 @@ build/
 # Ngrok / herramientas locales
 # =========================
 ngrok.yml
+
+# =========================
+# Archivos .yaml
+# =========================
+YAMLs/
